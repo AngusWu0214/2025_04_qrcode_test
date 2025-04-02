@@ -37,10 +37,30 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        .camera-error {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .camera-error.show {
+            display: block;
+        }
         button {
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        .scanning-status {
+            font-size: 14px;
+            color: #666;
+            margin: 5px 0;
         }
     </style>
 </head>
@@ -48,38 +68,106 @@
     <div class="container">
         <h1>QR Code 掃描頁面</h1>
         <div id="reader"></div>
+        <div id="cameraError" class="camera-error"></div>
+        <div id="scanningStatus" class="scanning-status"></div>
         <div id="result" class="result"></div>
-        <button onclick="startScanner()">開始掃描</button>
-        <button onclick="stopScanner()">停止掃描</button>
+        <div class="button-group">
+            <button onclick="startScanner()">開始掃描</button>
+            <button onclick="stopScanner()">停止掃描</button>
+        </div>
     </div>
 
     <script>
         let html5QrCode = null;
+        let lastScanTime = 0;
+        const SCAN_DEBOUNCE_TIME = 2000; // 2秒的防抖時間
+        let isScanning = false;
 
-        function startScanner() {
-            html5QrCode = new Html5Qrcode("reader");
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-            html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                onScanError
-            );
+        function updateScanningStatus(status) {
+            const statusDiv = document.getElementById('scanningStatus');
+            statusDiv.textContent = status;
+        }
+
+        function showCameraError(message) {
+            const errorDiv = document.getElementById('cameraError');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+        }
+
+        function hideCameraError() {
+            const errorDiv = document.getElementById('cameraError');
+            errorDiv.classList.remove('show');
+        }
+
+        async function startScanner() {
+            try {
+                // 檢查瀏覽器是否支援相機
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    showCameraError('您的瀏覽器不支援相機功能，請使用較新版本的瀏覽器。');
+                    return;
+                }
+
+                // 檢查是否有相機權限
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                stream.getTracks().forEach(track => track.stop());
+
+                html5QrCode = new Html5Qrcode("reader");
+                const config = { 
+                    fps: 10, 
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
+                };
+
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    config,
+                    onScanSuccess,
+                    onScanError
+                );
+
+                isScanning = true;
+                updateScanningStatus('正在掃描中...');
+                hideCameraError();
+            } catch (error) {
+                console.error('相機啟動失敗:', error);
+                if (error.name === 'NotAllowedError') {
+                    showCameraError('請允許使用相機權限以進行掃描。');
+                } else if (error.name === 'NotFoundError') {
+                    showCameraError('找不到相機裝置，請確認您的裝置有相機功能。');
+                } else {
+                    showCameraError('相機啟動失敗，請重新整理頁面後再試。');
+                }
+            }
         }
 
         function stopScanner() {
             if (html5QrCode) {
                 html5QrCode.stop().then(() => {
                     console.log('掃描器已停止');
+                    isScanning = false;
+                    updateScanningStatus('掃描已停止');
                 }).catch(err => {
                     console.error('停止掃描器時發生錯誤:', err);
+                    showCameraError('停止掃描時發生錯誤，請重新整理頁面。');
                 });
             }
         }
 
         async function onScanSuccess(decodedText, decodedResult) {
+            const currentTime = Date.now();
+            
+            // 防抖處理
+            if (currentTime - lastScanTime < SCAN_DEBOUNCE_TIME) {
+                console.log('忽略重複掃描');
+                return;
+            }
+            
+            lastScanTime = currentTime;
+            
             // 停止掃描器
             html5QrCode.stop();
+            isScanning = false;
+            updateScanningStatus('掃描完成，處理中...');
             
             // 從 URL 中提取 ID
             const id = decodedText.split('/').pop();
@@ -111,10 +199,18 @@
 
         function onScanError(errorMessage) {
             console.warn(`掃描錯誤: ${errorMessage}`);
+            updateScanningStatus('掃描中...');
         }
 
         // 頁面載入時自動開始掃描
         window.onload = startScanner;
+
+        // 頁面關閉時停止掃描
+        window.onbeforeunload = () => {
+            if (html5QrCode) {
+                html5QrCode.stop();
+            }
+        };
     </script>
 </body>
 </html> 
