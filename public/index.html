@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code 驗證系統</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        #qrCode {
+            margin: 20px 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .verified {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .unverified {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>QR Code 驗證系統</h1>
+        <button onclick="generateQR()">生成新的 QR Code</button>
+        <div id="qrCode"></div>
+        <div id="status" class="status"></div>
+        <button onclick="checkStatus()">檢查驗證狀態</button>
+    </div>
+
+    <script>
+        let currentId = null;
+
+        async function generateQR() {
+            try {
+                const response = await fetch('/generate-qr', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentId = data.id;
+                    document.getElementById('qrCode').innerHTML = `<img src="${data.qrCode}" alt="QR Code">`;
+                    document.getElementById('status').innerHTML = '等待驗證...';
+                    document.getElementById('status').className = 'status unverified';
+                }
+            } catch (error) {
+                console.error('生成 QR Code 失敗:', error);
+            }
+        }
+
+        async function checkStatus() {
+            if (!currentId) {
+                alert('請先生成 QR Code');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/check-status/${currentId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const status = data.status;
+                    const statusDiv = document.getElementById('status');
+                    statusDiv.innerHTML = `
+                        驗證狀態: ${status.verified ? '已驗證' : '未驗證'}<br>
+                        生成時間: ${new Date(status.timestamp).toLocaleString()}<br>
+                        驗證時間: ${status.verificationTime ? new Date(status.verificationTime).toLocaleString() : '尚未驗證'}<br>
+                        驗證次數: ${status.attempts}
+                    `;
+                    statusDiv.className = `status ${status.verified ? 'verified' : 'unverified'}`;
+                }
+            } catch (error) {
+                console.error('檢查狀態失敗:', error);
+            }
+        }
+    </script>
+</body>
+</html> 

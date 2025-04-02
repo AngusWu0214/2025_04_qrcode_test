@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code 顯示頁面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        #qrCode {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            width: 100%;
+            text-align: center;
+        }
+        .verified {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .unverified {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        select {
+            padding: 10px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>QR Code 顯示頁面</h1>
+        <select id="idSelect">
+            <option value="">請選擇 ID</option>
+            <option value="test1">Test 1</option>
+            <option value="test2">Test 2</option>
+            <option value="test3">Test 3</option>
+            <option value="test4">Test 4</option>
+            <option value="test5">Test 5</option>
+        </select>
+        <button onclick="generateQR()">生成 QR Code</button>
+        <div id="qrCode"></div>
+        <div id="status" class="status"></div>
+        <button onclick="checkStatus()">檢查狀態</button>
+    </div>
+
+    <script>
+        let currentId = null;
+
+        async function generateQR() {
+            const idSelect = document.getElementById('idSelect');
+            const selectedId = idSelect.value;
+            
+            if (!selectedId) {
+                alert('請選擇 ID');
+                return;
+            }
+
+            try {
+                const response = await fetch('/generate-qr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id: selectedId })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentId = data.id;
+                    document.getElementById('qrCode').innerHTML = `<img src="${data.qrCode}" alt="QR Code">`;
+                    document.getElementById('status').innerHTML = '等待驗證...';
+                    document.getElementById('status').className = 'status unverified';
+                }
+            } catch (error) {
+                console.error('生成 QR Code 失敗:', error);
+            }
+        }
+
+        async function checkStatus() {
+            if (!currentId) {
+                alert('請先生成 QR Code');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/check-status/${currentId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const status = data.status;
+                    const statusDiv = document.getElementById('status');
+                    statusDiv.innerHTML = `
+                        驗證狀態: ${status.verified ? '已驗證' : '未驗證'}<br>
+                        生成時間: ${new Date(status.timestamp).toLocaleString()}<br>
+                        驗證時間: ${status.verificationTime ? new Date(status.verificationTime).toLocaleString() : '尚未驗證'}<br>
+                        驗證次數: ${status.attempts}
+                    `;
+                    statusDiv.className = `status ${status.verified ? 'verified' : 'unverified'}`;
+                }
+            } catch (error) {
+                console.error('檢查狀態失敗:', error);
+            }
+        }
+    </script>
+</body>
+</html> 

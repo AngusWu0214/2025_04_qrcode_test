@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code 掃描頁面</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        #reader {
+            width: 100%;
+            max-width: 600px;
+        }
+        .result {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            width: 100%;
+            text-align: center;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>QR Code 掃描頁面</h1>
+        <div id="reader"></div>
+        <div id="result" class="result"></div>
+        <button onclick="startScanner()">開始掃描</button>
+        <button onclick="stopScanner()">停止掃描</button>
+    </div>
+
+    <script>
+        let html5QrCode = null;
+
+        function startScanner() {
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanError
+            );
+        }
+
+        function stopScanner() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    console.log('掃描器已停止');
+                }).catch(err => {
+                    console.error('停止掃描器時發生錯誤:', err);
+                });
+            }
+        }
+
+        async function onScanSuccess(decodedText, decodedResult) {
+            // 停止掃描器
+            html5QrCode.stop();
+            
+            // 從 URL 中提取 ID
+            const id = decodedText.split('/').pop();
+            
+            try {
+                const response = await fetch(`/verify/${id}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                const resultDiv = document.getElementById('result');
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        ${data.message}<br>
+                        驗證時間: ${new Date().toLocaleString()}<br>
+                        驗證次數: ${data.status.attempts}
+                    `;
+                    resultDiv.className = 'result success';
+                } else {
+                    resultDiv.innerHTML = data.error;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                console.error('驗證失敗:', error);
+                document.getElementById('result').innerHTML = '驗證失敗，請重試';
+                document.getElementById('result').className = 'result error';
+            }
+        }
+
+        function onScanError(errorMessage) {
+            console.warn(`掃描錯誤: ${errorMessage}`);
+        }
+
+        // 頁面載入時自動開始掃描
+        window.onload = startScanner;
+    </script>
+</body>
+</html> 
